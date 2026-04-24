@@ -4,6 +4,13 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>GitHub Security Dashboard</title>
+<script>
+// Auth guard — redirect to login if session token is missing
+(function(){
+  const HASH='3daca79dc54eca7037ee41f88c8b23661b01a312b9514630239e496873e2a1ec';
+  if(sessionStorage.getItem('gh_sec_auth')!==HASH) location.replace('../index.html');
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
@@ -145,6 +152,7 @@ a.al:hover{text-decoration:underline}
 
 <header>
   <div class="logo">🔒 GitHub Security</div>
+  <button onclick="sessionStorage.clear();location.replace('../index.html')" style="margin-left:auto;background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:7px;cursor:pointer;font-size:.78rem;transition:all .2s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--text)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">Sign out</button>
   <nav class="tab-nav">
     <button class="tab-btn active" data-tab="secrets">🔐 Secret Scanning <span class="tab-badge" id="b-secrets">—</span></button>
     <button class="tab-btn" data-tab="code">🐛 Code Scanning <span class="tab-badge" id="b-code">—</span></button>

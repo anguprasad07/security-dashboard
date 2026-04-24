@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GitHub Security Dashboard — Login</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3250;
+  --accent:#6366f1;--accent2:#8b5cf6;--red:#ef4444;--green:#22c55e;
+  --text:#e2e8f0;--muted:#94a3b8;--radius:12px;
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:40px 44px;width:100%;max-width:400px;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+
+.logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:28px}
+.logo span{font-size:2rem}
+.logo h1{font-size:1.25rem;font-weight:700}
+
+.subtitle{text-align:center;font-size:.85rem;color:var(--muted);margin-bottom:32px}
+
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:20px}
+.field label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.field input{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 14px;border-radius:8px;font-size:.9rem;outline:none;transition:border-color .2s,box-shadow .2s;width:100%}
+.field input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+
+.btn{width:100%;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:.9rem;font-weight:600;cursor:pointer;transition:background .2s,transform .1s;margin-top:4px}
+.btn:hover{background:var(--accent2)}
+.btn:active{transform:scale(.98)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+
+.error{display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#f87171;border-radius:8px;padding:10px 14px;font-size:.82rem;margin-bottom:16px;text-align:center}
+.error.show{display:block}
+
+.hint{text-align:center;font-size:.75rem;color:var(--muted);margin-top:20px}
+.hint code{background:var(--surface2);padding:1px 5px;border-radius:4px;font-size:.72rem}
+
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite;margin-right:8px;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo"><span>🔒</span><h1>GitHub Security</h1></div>
+  <p class="subtitle">Internal security dashboard — please sign in to continue</p>
+
+  <div class="error" id="errMsg">Incorrect password. Please try again.</div>
+
+  <form id="loginForm">
+    <div class="field">
+      <label for="password">Password</label>
+      <input type="password" id="password" placeholder="Enter password" autocomplete="current-password" autofocus />
+    </div>
+    <button class="btn" type="submit" id="submitBtn">Sign In</button>
+  </form>
+
+  <p class="hint">Default password: <code>Motive@2026</code></p>
+</div>
+
+<script>
+// SHA-256 of the correct password — change this hash when you rotate the password.
+// To generate a new hash: https://emn178.github.io/online-tools/sha256.html
+const HASH = '3daca79dc54eca7037ee41f88c8b23661b01a312b9514630239e496873e2a1ec';
+const SESSION_KEY = 'gh_sec_auth';
+const DASHBOARD = 'dashboard/index.html';
+
+// If already authenticated, skip login
+if (sessionStorage.getItem(SESSION_KEY) === HASH) {
+  location.replace(DASHBOARD);
+}
+
+async function sha256(msg) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(msg));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+document.getElementById('loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = document.getElementById('submitBtn');
+  const err = document.getElementById('errMsg');
+  const pw  = document.getElementById('password').value;
+
+  if (!pw) return;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Signing in…';
+  err.classList.remove('show');
+
+  const digest = await sha256(pw);
+
+  if (digest === HASH) {
+    sessionStorage.setItem(SESSION_KEY, HASH);
+    location.replace(DASHBOARD);
+  } else {
+    err.classList.add('show');
+    btn.disabled = false;
+    btn.textContent = 'Sign In';
+    document.getElementById('password').value = '';
+    document.getElementById('password').focus();
+  }
+});
+</script>
+</body>
+</html>
