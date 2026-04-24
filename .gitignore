@@ -1,0 +1,6 @@
+*.log
+*.csv
+__pycache__/
+*.py[cod]
+.env
+github_secrets.log

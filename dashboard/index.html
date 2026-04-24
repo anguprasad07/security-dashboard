@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GitHub Security Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3250;
+  --accent:#6366f1;--accent2:#8b5cf6;--red:#ef4444;--orange:#f97316;
+  --green:#22c55e;--yellow:#f59e0b;--blue:#3b82f6;--cyan:#06b6d4;
+  --text:#e2e8f0;--muted:#94a3b8;--radius:12px;
+}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
+
+/* ── HEADER ── */
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;position:sticky;top:0;z-index:100;display:flex;align-items:stretch;gap:0}
+.logo{display:flex;align-items:center;gap:8px;padding:14px 20px 14px 0;font-size:1rem;font-weight:700;white-space:nowrap;border-right:1px solid var(--border);margin-right:8px}
+.tab-nav{display:flex;align-items:stretch;gap:0;overflow-x:auto}
+.tab-btn{background:transparent;border:none;border-bottom:3px solid transparent;color:var(--muted);padding:0 16px;font-size:.82rem;font-weight:600;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:7px;transition:all .15s}
+.tab-btn:hover{color:var(--text);background:rgba(255,255,255,.03)}
+.tab-btn.active{color:var(--text);border-bottom-color:var(--accent)}
+.tab-badge{background:var(--surface2);color:var(--muted);padding:1px 7px;border-radius:20px;font-size:.68rem;font-weight:700}
+.tab-badge.on{background:rgba(99,102,241,.2);color:var(--accent)}
+
+/* ── PANELS ── */
+.panel{display:none}.panel.active{display:block}
+
+/* ── SPLASH ── */
+.splash{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;gap:16px;color:var(--muted)}
+.dropzone{border:2px dashed var(--border);border-radius:var(--radius);padding:56px 72px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s}
+.dropzone:hover,.dropzone.over{border-color:var(--accent);background:rgba(99,102,241,.06)}
+.dropzone h2{font-size:1.3rem;color:var(--text);margin-bottom:8px}
+.dropzone p{font-size:.88rem}
+.dropzone code{background:var(--surface2);padding:1px 6px;border-radius:4px;font-size:.78rem}
+
+/* ── MAIN ── */
+.tab-main{padding:22px 26px}
+.sec{font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:14px;margin-top:4px}
+
+/* ── STAT GRID ── */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:14px;margin-bottom:26px}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 18px;position:relative;overflow:hidden}
+.stat-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--cc,var(--accent))}
+.stat-card .lbl{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:5px}
+.stat-card .val{font-size:1.9rem;font-weight:700;line-height:1}
+.stat-card .sub{font-size:.7rem;color:var(--muted);margin-top:4px}
+
+/* ── CHART GRID ── */
+.crow{display:grid;gap:14px;margin-bottom:16px}
+.c1{grid-template-columns:1fr}
+.c2{grid-template-columns:1fr 1fr}
+.c2w{grid-template-columns:1fr 1.6fr}
+.c3{grid-template-columns:repeat(3,1fr)}
+.c4{grid-template-columns:repeat(4,1fr)}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px}
+.chart-card h3{font-size:.86rem;font-weight:600;margin-bottom:14px}
+.cw canvas{max-height:230px}
+.cw-t canvas{max-height:320px}
+
+/* ── FEATURE BARS ── */
+.feat-list{display:flex;flex-direction:column;gap:11px}
+.feat-row .feat-lbl{display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:4px}
+.feat-row .feat-lbl span:last-child{color:var(--muted);font-size:.72rem}
+.feat-bar{height:7px;border-radius:4px;background:var(--surface2);overflow:hidden}
+.feat-fill{height:100%;border-radius:4px;transition:width .5s ease}
+
+/* ── FILTERS ── */
+.fbar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:18px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.fg{display:flex;flex-direction:column;gap:4px;min-width:140px}
+.fg label{font-size:.68rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.fg select,.fg input{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 9px;border-radius:7px;font-size:.8rem;outline:none;transition:border-color .2s}
+.fg select:focus,.fg input:focus{border-color:var(--accent)}
+.fg select option{background:var(--surface2)}
+.fgs{flex:1;min-width:190px}
+.fgs input{width:100%}
+.breset{background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 13px;border-radius:7px;cursor:pointer;font-size:.8rem;align-self:flex-end;transition:all .2s}
+.breset:hover{border-color:var(--accent);color:var(--text)}
+
+/* ── TABLE ── */
+.tcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:26px}
+.thead2{padding:12px 18px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)}
+.thead2 h3{font-size:.88rem;font-weight:600}
+.twrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.8rem}
+thead th{background:var(--surface2);padding:9px 13px;text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700;cursor:pointer;white-space:nowrap;user-select:none;border-bottom:1px solid var(--border)}
+thead th:hover{color:var(--text)}
+.si{opacity:.4;margin-left:3px;font-size:.65rem}
+th.sa .si::after{content:' ▲';opacity:1}th.sd .si::after{content:' ▼';opacity:1}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:hover{background:var(--surface2)}
+tbody td{padding:8px 13px;vertical-align:middle}
+
+/* ── BADGES ── */
+.b{display:inline-block;padding:2px 8px;border-radius:20px;font-size:.67rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.b-critical{background:rgba(239,68,68,.18);color:#f87171}
+.b-high{background:rgba(249,115,22,.18);color:#fb923c}
+.b-medium{background:rgba(245,158,11,.18);color:#fbbf24}
+.b-low{background:rgba(34,197,94,.18);color:#4ade80}
+.b-warning{background:rgba(59,130,246,.18);color:#60a5fa}
+.b-note,.b-none{background:rgba(148,163,184,.12);color:#94a3b8}
+.b-open{background:rgba(239,68,68,.15);color:#f87171}
+.b-fixed,.b-closed{background:rgba(34,197,94,.15);color:#4ade80}
+.b-dismissed{background:rgba(245,158,11,.15);color:#fbbf24}
+.b-matched{background:rgba(34,197,94,.15);color:#4ade80}
+.b-no_match{background:rgba(245,158,11,.15);color:#fbbf24}
+.b-repo_not_in_codeowners{background:rgba(148,163,184,.12);color:#94a3b8}
+.b-enabled,.b-true{background:rgba(34,197,94,.15);color:#4ade80}
+.b-disabled,.b-false{background:rgba(239,68,68,.15);color:#f87171}
+.b-public{background:rgba(59,130,246,.12);color:#60a5fa}
+.b-private{background:rgba(139,92,246,.12);color:#a78bfa}
+.b-internal{background:rgba(6,182,212,.12);color:#22d3ee}
+.b-found{background:rgba(34,197,94,.15);color:#4ade80}
+.b-active{background:rgba(239,68,68,.15);color:#f87171}
+.b-inactive{background:rgba(148,163,184,.12);color:#94a3b8}
+.b-unknown{background:rgba(245,158,11,.12);color:#fbbf24}
+
+/* ── MISC ── */
+.cm{font-family:monospace;font-size:.74rem;color:var(--muted);max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cr{font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ct{max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+a.al{color:var(--accent);text-decoration:none;font-size:.76rem}
+a.al:hover{text-decoration:underline}
+.sv{font-family:monospace;font-size:.74rem;color:var(--muted);max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sv.masked{filter:blur(5px);cursor:pointer;transition:filter .2s}.sv.masked:hover{filter:blur(0)}
+
+/* ── PAGINATION ── */
+.pg{display:flex;align-items:center;justify-content:space-between;padding:11px 18px;border-top:1px solid var(--border);font-size:.8rem}
+.pg-info{color:var(--muted)}
+.pg-btns{display:flex;gap:5px}
+.pg-btns button{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 9px;border-radius:6px;cursor:pointer;font-size:.76rem;transition:all .15s}
+.pg-btns button:hover{border-color:var(--accent)}
+.pg-btns button.on{background:var(--accent);border-color:var(--accent)}
+.pg-btns button:disabled{opacity:.3;cursor:not-allowed}
+
+@media(max-width:1100px){.c4{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:900px){.c3,.c2,.c2w{grid-template-columns:1fr}.tab-main{padding:14px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🔒 GitHub Security</div>
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="secrets">🔐 Secret Scanning <span class="tab-badge" id="b-secrets">—</span></button>
+    <button class="tab-btn" data-tab="code">🐛 Code Scanning <span class="tab-badge" id="b-code">—</span></button>
+    <button class="tab-btn" data-tab="owners">👥 Owner Mapping <span class="tab-badge" id="b-owners">—</span></button>
+    <button class="tab-btn" data-tab="audit">🛡️ Security Audit <span class="tab-badge" id="b-audit">—</span></button>
+    <button class="tab-btn" data-tab="codeowners">📋 CODEOWNERS <span class="tab-badge" id="b-codeowners">—</span></button>
+  </nav>
+</header>
+
+<!-- ═══════════════════ SECRETS ═══════════════════ -->
+<div id="panel-secrets" class="panel active">
+  <div class="splash" id="sp-secrets">
+    <div class="dropzone" id="dz-secrets"><h2>🔐 Drop Secret Scanning CSV</h2><p>expects <code>github_secrets.csv</code></p></div>
+    <input type="file" id="fi-secrets" accept=".csv" style="display:none">
+  </div>
+  <div class="tab-main" id="mn-secrets" style="display:none">
+    <div class="sec">Overview</div><div class="stat-grid" id="st-secrets"></div>
+    <div class="sec">Distribution</div>
+    <div class="crow c3" style="margin-bottom:14px">
+      <div class="chart-card"><h3>Alert State</h3><div class="cw"><canvas id="sc-state"></canvas></div></div>
+      <div class="chart-card"><h3>Repository Visibility</h3><div class="cw"><canvas id="sc-vis"></canvas></div></div>
+      <div class="chart-card"><h3>Secret Status</h3><div class="cw"><canvas id="sc-status"></canvas></div></div>
+    </div>
+    <div class="crow c2w" style="margin-bottom:14px">
+      <div class="chart-card"><h3>Exposure Type</h3><div class="cw"><canvas id="sc-exp"></canvas></div></div>
+      <div class="chart-card"><h3>Top Repos by Alert Count</h3><div class="cw cw-t"><canvas id="sc-repos"></canvas></div></div>
+    </div>
+    <div class="crow c1" style="margin-bottom:24px">
+      <div class="chart-card"><h3>Alerts by Secret Type</h3><div class="cw cw-t"><canvas id="sc-types"></canvas></div></div>
+    </div>
+    <div class="sec">Data Explorer</div>
+    <div class="fbar">
+      <div class="fg"><label>State</label><select id="sf-state"><option value="">All</option></select></div>
+      <div class="fg"><label>Status</label><select id="sf-status"><option value="">All</option></select></div>
+      <div class="fg"><label>Visibility</label><select id="sf-vis"><option value="">All</option></select></div>
+      <div class="fg"><label>Exposure</label><select id="sf-exp"><option value="">All</option></select></div>
+      <div class="fg"><label>Secret Type</label><select id="sf-stype"><option value="">All</option></select></div>
+      <div class="fg"><label>Repository</label><select id="sf-repo"><option value="">All</option></select></div>
+      <div class="fg fgs"><label>Search</label><input type="text" id="sf-q" placeholder="Alert ID, repo, type…"></div>
+      <button class="breset" id="sr-rst">✕ Reset</button>
+    </div>
+    <div class="tcard">
+      <div class="thead2"><h3>Secret Alerts</h3><span id="sc-cnt" style="font-size:.78rem;color:var(--muted)"></span></div>
+      <div class="twrap"><table>
+        <thead><tr>
+          <th data-t="secrets" data-c="Alert_ID">ID<span class="si"></span></th>
+          <th data-t="secrets" data-c="Alert_State">State<span class="si"></span></th>
+          <th data-t="secrets" data-c="Secret_Type_Display_Name">Secret Type<span class="si"></span></th>
+          <th data-t="secrets" data-c="Secret_Value">Secret Value<span class="si"></span></th>
+          <th data-t="secrets" data-c="Secret_Status">Status<span class="si"></span></th>
+          <th data-t="secrets" data-c="Exposure_Type">Exposure<span class="si"></span></th>
+          <th data-t="secrets" data-c="Repository_Name">Repository<span class="si"></span></th>
+          <th data-t="secrets" data-c="Repository_Visibility">Visibility<span class="si"></span></th>
+          <th data-t="secrets" data-c="File_Path">File<span class="si"></span></th>
+          <th data-t="secrets" data-c="Created_At">Created<span class="si"></span></th>
+        </tr></thead>
+        <tbody id="tb-secrets"></tbody>
+      </table></div>
+      <div class="pg"><span class="pg-info" id="pi-secrets"></span><div class="pg-btns" id="pb-secrets"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ CODE SCANNING ═══════════════════ -->
+<div id="panel-code" class="panel">
+  <div class="splash" id="sp-code">
+    <div class="dropzone" id="dz-code"><h2>🐛 Drop Code Scanning CSV</h2><p>expects <code>kt_alerts.csv</code></p></div>
+    <input type="file" id="fi-code" accept=".csv" style="display:none">
+  </div>
+  <div class="tab-main" id="mn-code" style="display:none">
+    <div class="sec">Overview</div><div class="stat-grid" id="st-code"></div>
+    <div class="sec">Distribution</div>
+    <div class="crow c4" style="margin-bottom:14px">
+      <div class="chart-card"><h3>Severity</h3><div class="cw"><canvas id="cc-sev"></canvas></div></div>
+      <div class="chart-card"><h3>State</h3><div class="cw"><canvas id="cc-state"></canvas></div></div>
+      <div class="chart-card"><h3>Tool</h3><div class="cw"><canvas id="cc-tool"></canvas></div></div>
+      <div class="chart-card"><h3>Top Repos</h3><div class="cw"><canvas id="cc-repos"></canvas></div></div>
+    </div>
+    <div class="crow c1" style="margin-bottom:24px">
+      <div class="chart-card"><h3>Top Rules by Alert Count</h3><div class="cw cw-t"><canvas id="cc-rules"></canvas></div></div>
+    </div>
+    <div class="sec">Data Explorer</div>
+    <div class="fbar">
+      <div class="fg"><label>Severity</label><select id="cf-sev"><option value="">All</option></select></div>
+      <div class="fg"><label>State</label><select id="cf-state"><option value="">All</option></select></div>
+      <div class="fg"><label>Tool</label><select id="cf-tool"><option value="">All</option></select></div>
+      <div class="fg"><label>Repository</label><select id="cf-repo"><option value="">All</option></select></div>
+      <div class="fg fgs"><label>Search</label><input type="text" id="cf-q" placeholder="Rule, file, repo…"></div>
+      <button class="breset" id="cr-rst">✕ Reset</button>
+    </div>
+    <div class="tcard">
+      <div class="thead2"><h3>Code Scanning Alerts</h3><span id="cc-cnt" style="font-size:.78rem;color:var(--muted)"></span></div>
+      <div class="twrap"><table>
+        <thead><tr>
+          <th data-t="code" data-c="alert_id">ID<span class="si"></span></th>
+          <th data-t="code" data-c="severity">Severity<span class="si"></span></th>
+          <th data-t="code" data-c="title">Rule / Title<span class="si"></span></th>
+          <th data-t="code" data-c="state">State<span class="si"></span></th>
+          <th data-t="code" data-c="repo_name">Repository<span class="si"></span></th>
+          <th data-t="code" data-c="vulnerable_file_path">File Path<span class="si"></span></th>
+          <th data-t="code" data-c="tool_name">Tool<span class="si"></span></th>
+          <th data-t="code" data-c="created_at">Created<span class="si"></span></th>
+          <th>Link</th>
+        </tr></thead>
+        <tbody id="tb-code"></tbody>
+      </table></div>
+      <div class="pg"><span class="pg-info" id="pi-code"></span><div class="pg-btns" id="pb-code"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ OWNER MAPPING ═══════════════════ -->
+<div id="panel-owners" class="panel">
+  <div class="splash" id="sp-owners">
+    <div class="dropzone" id="dz-owners"><h2>👥 Drop Owner Mapping CSV</h2><p>expects <code>mapped_alerts.csv</code></p></div>
+    <input type="file" id="fi-owners" accept=".csv" style="display:none">
+  </div>
+  <div class="tab-main" id="mn-owners" style="display:none">
+    <div class="sec">Overview</div><div class="stat-grid" id="st-owners"></div>
+    <div class="sec">Distribution</div>
+    <div class="crow c3" style="margin-bottom:14px">
+      <div class="chart-card"><h3>Match Status</h3><div class="cw"><canvas id="oc-match"></canvas></div></div>
+      <div class="chart-card"><h3>Severity</h3><div class="cw"><canvas id="oc-sev"></canvas></div></div>
+      <div class="chart-card"><h3>State</h3><div class="cw"><canvas id="oc-state"></canvas></div></div>
+    </div>
+    <div class="crow c1" style="margin-bottom:24px">
+      <div class="chart-card"><h3>Top Owners by Alert Count</h3><div class="cw cw-t"><canvas id="oc-owners"></canvas></div></div>
+    </div>
+    <div class="sec">Data Explorer</div>
+    <div class="fbar">
+      <div class="fg"><label>Severity</label><select id="of-sev"><option value="">All</option></select></div>
+      <div class="fg"><label>State</label><select id="of-state"><option value="">All</option></select></div>
+      <div class="fg"><label>Match Status</label><select id="of-match"><option value="">All</option></select></div>
+      <div class="fg"><label>Owner</label><select id="of-owner"><option value="">All</option></select></div>
+      <div class="fg"><label>Repository</label><select id="of-repo"><option value="">All</option></select></div>
+      <div class="fg fgs"><label>Search</label><input type="text" id="of-q" placeholder="Rule, file, owner, repo…"></div>
+      <button class="breset" id="or-rst">✕ Reset</button>
+    </div>
+    <div class="tcard">
+      <div class="thead2"><h3>Alerts with Owner</h3><span id="oc-cnt" style="font-size:.78rem;color:var(--muted)"></span></div>
+      <div class="twrap"><table>
+        <thead><tr>
+          <th data-t="owners" data-c="alert_id">ID<span class="si"></span></th>
+          <th data-t="owners" data-c="severity">Severity<span class="si"></span></th>
+          <th data-t="owners" data-c="state">State<span class="si"></span></th>
+          <th data-t="owners" data-c="repo_name">Repository<span class="si"></span></th>
+          <th data-t="owners" data-c="vulnerable_file_path">File Path<span class="si"></span></th>
+          <th data-t="owners" data-c="title">Rule<span class="si"></span></th>
+          <th data-t="owners" data-c="codeowner">Owner<span class="si"></span></th>
+          <th data-t="owners" data-c="matched_pattern">Pattern<span class="si"></span></th>
+          <th data-t="owners" data-c="match_status">Match<span class="si"></span></th>
+          <th>Link</th>
+        </tr></thead>
+        <tbody id="tb-owners"></tbody>
+      </table></div>
+      <div class="pg"><span class="pg-info" id="pi-owners"></span><div class="pg-btns" id="pb-owners"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ SECURITY AUDIT ═══════════════════ -->
+<div id="panel-audit" class="panel">
+  <div class="splash" id="sp-audit">
+    <div class="dropzone" id="dz-audit"><h2>🛡️ Drop Security Audit CSV</h2><p>expects <code>security_audit.csv</code></p></div>
+    <input type="file" id="fi-audit" accept=".csv" style="display:none">
+  </div>
+  <div class="tab-main" id="mn-audit" style="display:none">
+    <div class="sec">Overview</div><div class="stat-grid" id="st-audit"></div>
+    <div class="sec">Feature Coverage</div>
+    <div class="crow c2" style="margin-bottom:14px">
+      <div class="chart-card"><h3>Security Feature Coverage</h3><div id="feat-bars"></div></div>
+      <div class="chart-card"><h3>Visibility Distribution</h3><div class="cw"><canvas id="ac-vis"></canvas></div></div>
+    </div>
+    <div class="crow c2" style="margin-bottom:24px">
+      <div class="chart-card"><h3>Archived vs Active</h3><div class="cw"><canvas id="ac-arch"></canvas></div></div>
+      <div class="chart-card"><h3>All Features Enabled</h3><div class="cw"><canvas id="ac-full"></canvas></div></div>
+    </div>
+    <div class="sec">Repository Security Matrix</div>
+    <div class="fbar">
+      <div class="fg"><label>Visibility</label><select id="af-vis"><option value="">All</option></select></div>
+      <div class="fg"><label>Archived</label><select id="af-arch"><option value="">All</option><option>True</option><option>False</option></select></div>
+      <div class="fg"><label>GHAS</label><select id="af-ghas"><option value="">All</option><option>True</option><option>False</option></select></div>
+      <div class="fg"><label>Secret Scanning</label><select id="af-ss"><option value="">All</option><option>True</option><option>False</option></select></div>
+      <div class="fg"><label>Dependabot</label><select id="af-dep"><option value="">All</option><option>True</option><option>False</option></select></div>
+      <div class="fg"><label>CodeQL</label><select id="af-cql"><option value="">All</option><option>True</option><option>False</option></select></div>
+      <div class="fg fgs"><label>Search</label><input type="text" id="af-q" placeholder="Repo name…"></div>
+      <button class="breset" id="ar-rst">✕ Reset</button>
+    </div>
+    <div class="tcard">
+      <div class="thead2"><h3>Repository Security Features</h3><span id="ac-cnt" style="font-size:.78rem;color:var(--muted)"></span></div>
+      <div class="twrap"><table>
+        <thead><tr>
+          <th data-t="audit" data-c="repo_name">Repository<span class="si"></span></th>
+          <th data-t="audit" data-c="visibility">Visibility<span class="si"></span></th>
+          <th data-t="audit" data-c="archived">Archived<span class="si"></span></th>
+          <th data-t="audit" data-c="advanced_security_enabled">GHAS<span class="si"></span></th>
+          <th data-t="audit" data-c="secret_scanning_enabled">Secret Scan<span class="si"></span></th>
+          <th data-t="audit" data-c="secret_scanning_push_protection_enabled">Push Protect<span class="si"></span></th>
+          <th data-t="audit" data-c="dependabot_alerts_enabled">Dependabot<span class="si"></span></th>
+          <th data-t="audit" data-c="codeql_enabled">CodeQL<span class="si"></span></th>
+        </tr></thead>
+        <tbody id="tb-audit"></tbody>
+      </table></div>
+      <div class="pg"><span class="pg-info" id="pi-audit"></span><div class="pg-btns" id="pb-audit"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ CODEOWNERS ═══════════════════ -->
+<div id="panel-codeowners" class="panel">
+  <div class="splash" id="sp-codeowners">
+    <div class="dropzone" id="dz-codeowners"><h2>📋 Drop CODEOWNERS CSV</h2><p>expects <code>codeowners_report.csv</code></p></div>
+    <input type="file" id="fi-codeowners" accept=".csv" style="display:none">
+  </div>
+  <div class="tab-main" id="mn-codeowners" style="display:none">
+    <div class="sec">Overview</div><div class="stat-grid" id="st-codeowners"></div>
+    <div class="sec">Distribution</div>
+    <div class="crow c2" style="margin-bottom:14px">
+      <div class="chart-card"><h3>Entry Status</h3><div class="cw"><canvas id="co-status"></canvas></div></div>
+      <div class="chart-card"><h3>CODEOWNERS File Location</h3><div class="cw"><canvas id="co-path"></canvas></div></div>
+    </div>
+    <div class="crow c1" style="margin-bottom:24px">
+      <div class="chart-card"><h3>Top Owners by Repo Count</h3><div class="cw cw-t"><canvas id="co-owners"></canvas></div></div>
+    </div>
+    <div class="sec">Data Explorer</div>
+    <div class="fbar">
+      <div class="fg"><label>Owner</label><select id="cof-owner"><option value="">All</option></select></div>
+      <div class="fg"><label>Status</label><select id="cof-status"><option value="">All</option></select></div>
+      <div class="fg fgs"><label>Search</label><input type="text" id="cof-q" placeholder="Repo, pattern, owner…"></div>
+      <button class="breset" id="cor-rst">✕ Reset</button>
+    </div>
+    <div class="tcard">
+      <div class="thead2"><h3>CODEOWNERS Entries</h3><span id="co-cnt" style="font-size:.78rem;color:var(--muted)"></span></div>
+      <div class="twrap"><table>
+        <thead><tr>
+          <th data-t="codeowners" data-c="repo_name">Repository<span class="si"></span></th>
+          <th data-t="codeowners" data-c="codeowners_path">File<span class="si"></span></th>
+          <th data-t="codeowners" data-c="folder">Pattern<span class="si"></span></th>
+          <th data-t="codeowners" data-c="owner">Owner<span class="si"></span></th>
+          <th data-t="codeowners" data-c="status">Status<span class="si"></span></th>
+        </tr></thead>
+        <tbody id="tb-codeowners"></tbody>
+      </table></div>
+      <div class="pg"><span class="pg-info" id="pi-codeowners"></span><div class="pg-btns" id="pb-codeowners"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+Chart.register(ChartDataLabels);
+
+// ── Constants ──────────────────────────────────────────────────────────────
+const PAL = ['#6366f1','#8b5cf6','#06b6d4','#22c55e','#f59e0b','#ef4444','#ec4899','#3b82f6','#14b8a6','#f97316','#a855f7','#84cc16'];
+const SEV_C = {critical:'#ef4444',high:'#f97316',medium:'#f59e0b',low:'#22c55e',warning:'#3b82f6',note:'#94a3b8',error:'#ef4444',none:'#94a3b8'};
+const STATE_C = {open:'#ef4444',dismissed:'#f59e0b',fixed:'#22c55e',closed:'#22c55e'};
+const MATCH_C = {matched:'#22c55e',no_match:'#f59e0b',repo_not_in_codeowners:'#94a3b8'};
+const PS = 25;
+const pc = i => PAL[i % PAL.length];
+
+// ── State ──────────────────────────────────────────────────────────────────
+const S = {};
+['secrets','code','owners','audit','codeowners'].forEach(t => {
+  S[t] = {rows:[],filtered:[],page:1,sc:'',sd:-1,ch:{}};
+});
+
+// ── Utilities ──────────────────────────────────────────────────────────────
+const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const pct = (a,b) => b ? Math.round(a/b*100) : 0;
+const short = n => (n||'').split('/').pop() || n;
+const fmtD = s => { try { return s?new Date(s).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'2-digit'}):'—'; } catch{return s||'—';} };
+const countBy = (rows,k) => rows.reduce((a,r)=>{ const v=r[k]||'Unknown'; a[v]=(a[v]||0)+1; return a; },{});
+const uniq = (rows,k) => [...new Set(rows.map(r=>r[k]).filter(Boolean))];
+const asBool = v => (v||'').toLowerCase()==='true';
+const gv = id => document.getElementById(id).value;
+
+// ── Chart helpers ──────────────────────────────────────────────────────────
+function destCh(t,id){ const c=S[t].ch[id]; if(c){c.destroy();delete S[t].ch[id];} }
+
+function mkDonut(t,id,data,colors){
+  destCh(t,id);
+  const labels=Object.keys(data), vals=Object.values(data);
+  S[t].ch[id]=new Chart(document.getElementById(id),{
+    type:'doughnut',
+    data:{labels,datasets:[{data:vals,backgroundColor:colors||labels.map((_,i)=>pc(i)),borderColor:'#1a1d27',borderWidth:3}]},
+    options:{responsive:true,maintainAspectRatio:true,plugins:{
+      legend:{position:'bottom',labels:{color:'#94a3b8',font:{size:10},padding:9}},
+      datalabels:{color:'#fff',font:{weight:'bold',size:10},formatter:(v,ctx)=>{const t2=ctx.dataset.data.reduce((a,b)=>a+b,0);return t2>0?Math.round(v/t2*100)+'%':'';}}}
+    }
+  });
+}
+
+function mkHBar(t,id,labels,vals,colors){
+  destCh(t,id);
+  S[t].ch[id]=new Chart(document.getElementById(id),{
+    type:'bar',
+    data:{labels,datasets:[{data:vals,backgroundColor:colors||labels.map((_,i)=>pc(i)),borderRadius:4}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:true,plugins:{
+      legend:{display:false},
+      datalabels:{anchor:'end',align:'end',color:'#94a3b8',font:{size:9},formatter:v=>v}},
+      scales:{x:{grid:{color:'#2e3250'},ticks:{color:'#94a3b8',font:{size:9}}},y:{grid:{color:'#2e3250'},ticks:{color:'#94a3b8',font:{size:10}}}}
+    }
+  });
+}
+
+// ── Pagination ─────────────────────────────────────────────────────────────
+function mkPg(t,total,infoId,btnsId){
+  const pages=Math.ceil(total/PS), cur=S[t].page, start=(cur-1)*PS;
+  document.getElementById(infoId).textContent = total
+    ? `Showing ${Math.min(start+1,total)}–${Math.min(start+PS,total)} of ${total.toLocaleString()}` : 'No results';
+  const con=document.getElementById(btnsId); con.innerHTML='';
+  const btn=(lbl,pg,dis,act)=>{
+    const b=document.createElement('button'); b.textContent=lbl; b.disabled=dis;
+    if(act)b.classList.add('on'); b.onclick=()=>{S[t].page=pg;REND[t]();}; con.appendChild(b);
+  };
+  btn('←',cur-1,cur<=1,false);
+  (pages<=7?Array.from({length:pages},(_,i)=>i+1):
+    cur<=4?[1,2,3,4,5,'…',pages]:cur>=pages-3?[1,'…',pages-4,pages-3,pages-2,pages-1,pages]:
+    [1,'…',cur-1,cur,cur+1,'…',pages]
+  ).forEach(p=>p==='…'
+    ?con.insertAdjacentHTML('beforeend','<span style="padding:4px 3px;color:var(--muted)">…</span>')
+    :btn(p,p,false,p===cur));
+  btn('→',cur+1,cur>=pages,false);
+}
+
+// ── Sort ───────────────────────────────────────────────────────────────────
+document.querySelectorAll('thead th[data-t]').forEach(th=>{
+  th.addEventListener('click',()=>{
+    const t=th.dataset.t, c=th.dataset.c;
+    if(S[t].sc===c)S[t].sd*=-1; else{S[t].sc=c;S[t].sd=1;}
+    th.closest('table').querySelectorAll('th').forEach(h=>h.classList.remove('sa','sd'));
+    th.classList.add(S[t].sd===1?'sa':'sd');
+    S[t].page=1; REND[t]();
+  });
+});
+
+function doSort(t){
+  const {sc,sd}=S[t]; if(!sc)return;
+  S[t].filtered.sort((a,b)=>{
+    const av=a[sc]||'',bv=b[sc]||'';
+    return(!isNaN(+av)&&!isNaN(+bv))?(+av-+bv)*sd:av.localeCompare(bv)*sd;
+  });
+}
+
+// ── Badge helpers ──────────────────────────────────────────────────────────
+const bdg = (v,cls) => `<span class="b b-${cls}">${esc(v)}</span>`;
+const boolBdg = v => asBool(v)?bdg('Enabled','enabled'):bdg('Disabled','disabled');
+const sevBdg = v => bdg(v||'none',(v||'none').toLowerCase());
+const stateBdg = v => bdg(v||'—',(v||'').toLowerCase());
+const matchBdg = v => bdg((v||'').replace(/_/g,' '),(v||'').toLowerCase());
+
+// ── Select helpers ─────────────────────────────────────────────────────────
+function fillSel(id,vals){
+  const el=document.getElementById(id), cur=el.value;
+  while(el.options.length>1)el.remove(1);
+  [...vals].sort().forEach(v=>{const o=document.createElement('option');o.value=v;o.textContent=v;el.appendChild(o);});
+  if(cur)el.value=cur;
+}
+
+// ── Stat cards ─────────────────────────────────────────────────────────────
+function mkStats(id,cards){
+  document.getElementById(id).innerHTML=cards.map(c=>`
+    <div class="stat-card" style="--cc:${c.color}">
+      <div class="lbl">${c.label}</div>
+      <div class="val" style="color:${c.color}">${c.value}</div>
+      <div class="sub">${c.sub}</div>
+    </div>`).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SECRETS
+// ══════════════════════════════════════════════════════════════════════════════
+function loadSecrets(rows){
+  S.secrets.rows=rows;
+  document.getElementById('sp-secrets').style.display='none';
+  document.getElementById('mn-secrets').style.display='block';
+  setBadge('secrets',rows.length);
+  fillSel('sf-state',uniq(rows,'Alert_State')); fillSel('sf-status',uniq(rows,'Secret_Status'));
+  fillSel('sf-vis',uniq(rows,'Repository_Visibility')); fillSel('sf-exp',uniq(rows,'Exposure_Type'));
+  fillSel('sf-stype',uniq(rows,'Secret_Type_Display_Name')); fillSel('sf-repo',uniq(rows,'Repository_Name'));
+  filterSecrets(); renderSecretsCharts(rows);
+}
+
+function filterSecrets(){
+  const [st,ss,sv,se,sp,sr,sq]=['sf-state','sf-status','sf-vis','sf-exp','sf-stype','sf-repo','sf-q'].map(gv);
+  const s=sq.toLowerCase();
+  S.secrets.filtered=S.secrets.rows.filter(r=>
+    (!st||r.Alert_State===st)&&(!ss||r.Secret_Status===ss)&&(!sv||r.Repository_Visibility===sv)&&
+    (!se||r.Exposure_Type===se)&&(!sp||r.Secret_Type_Display_Name===sp)&&(!sr||r.Repository_Name===sr)&&
+    (!s||JSON.stringify(r).toLowerCase().includes(s)));
+  S.secrets.page=1; renderSecrets();
+  const src=S.secrets.filtered; const n=src.length||1;
+  const open=src.filter(r=>r.Alert_State==='open').length;
+  const active=src.filter(r=>r.Secret_Status==='active').length;
+  const exposed=src.filter(r=>r.Exposure_Type==='Public').length;
+  mkStats('st-secrets',[
+    {label:'Total Alerts',value:src.length.toLocaleString(),sub:'all time',color:'#6366f1'},
+    {label:'Open',value:open.toLocaleString(),sub:`${pct(open,n)}% of total`,color:'#ef4444'},
+    {label:'Active Secrets',value:active.toLocaleString(),sub:`${pct(active,n)}% still active`,color:'#f59e0b'},
+    {label:'Repos Affected',value:new Set(src.map(r=>r.Repository_Name)).size.toLocaleString(),sub:'repositories',color:'#3b82f6'},
+    {label:'Secret Types',value:new Set(src.map(r=>r.Secret_Type)).size.toLocaleString(),sub:'distinct patterns',color:'#8b5cf6'},
+    {label:'Publicly Exposed',value:exposed.toLocaleString(),sub:`${pct(exposed,n)}% of alerts`,color:'#ec4899'},
+  ]);
+}
+
+function renderSecrets(){
+  doSort('secrets');
+  const rows=S.secrets.filtered, n=rows.length;
+  document.getElementById('sc-cnt').textContent=`${n.toLocaleString()} results`;
+  document.getElementById('tb-secrets').innerHTML=rows.slice((S.secrets.page-1)*PS,S.secrets.page*PS).map(r=>`
+    <tr>
+      <td>${esc(r.Alert_ID||'—')}</td>
+      <td>${stateBdg(r.Alert_State)}</td>
+      <td class="ct" title="${esc(r.Secret_Type_Display_Name)}">${esc(r.Secret_Type_Display_Name)||'—'}</td>
+      <td><span class="sv masked">${esc(r.Secret_Value)||'—'}</span></td>
+      <td>${bdg(r.Secret_Status||'Unknown',(r.Secret_Status||'unknown').toLowerCase())}</td>
+      <td>${r.Exposure_Type==='Public'?bdg('Public','open'):bdg('Not Public','fixed')}</td>
+      <td class="cr" title="${esc(r.Repository_Name)}">${r.Repository_URL?`<a class="al" href="${esc(r.Repository_URL)}" target="_blank">${esc(short(r.Repository_Name))}</a>`:esc(short(r.Repository_Name))}</td>
+      <td>${bdg(r.Repository_Visibility||'—',(r.Repository_Visibility||'').toLowerCase())}</td>
+      <td class="cm" title="${esc(r.File_Path)}">${esc(r.File_Path)||'—'}</td>
+      <td style="white-space:nowrap;color:var(--muted)">${fmtD(r.Created_At)}</td>
+    </tr>`).join('');
+  document.getElementById('tb-secrets').querySelectorAll('.sv.masked').forEach(el=>el.addEventListener('click',()=>el.classList.remove('masked')));
+  mkPg('secrets',n,'pi-secrets','pb-secrets');
+}
+
+function renderSecretsCharts(rows){
+  mkDonut('secrets','sc-state',countBy(rows,'Alert_State'),['#ef4444','#22c55e','#94a3b8']);
+  mkDonut('secrets','sc-vis',countBy(rows,'Repository_Visibility'),['#3b82f6','#8b5cf6','#06b6d4']);
+  mkDonut('secrets','sc-status',countBy(rows,'Secret_Status'),['#ef4444','#94a3b8','#f59e0b']);
+  mkDonut('secrets','sc-exp',countBy(rows,'Exposure_Type'),['#ef4444','#22c55e']);
+  const rm=countBy(rows,'Repository_Name'),tr=Object.entries(rm).sort((a,b)=>b[1]-a[1]).slice(0,12);
+  mkHBar('secrets','sc-repos',tr.map(([k])=>short(k)),tr.map(([,v])=>v),tr.map((_,i)=>pc(i)));
+  const tm=countBy(rows,'Secret_Type_Display_Name'),tt=Object.entries(tm).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  mkHBar('secrets','sc-types',tt.map(([k])=>k),tt.map(([,v])=>v),tt.map((_,i)=>pc(i)));
+}
+
+['sf-state','sf-status','sf-vis','sf-exp','sf-stype','sf-repo'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{S.secrets.page=1;filterSecrets();}));
+document.getElementById('sf-q').addEventListener('input',()=>{S.secrets.page=1;filterSecrets();});
+document.getElementById('sr-rst').addEventListener('click',()=>{['sf-state','sf-status','sf-vis','sf-exp','sf-stype','sf-repo'].forEach(id=>document.getElementById(id).value='');document.getElementById('sf-q').value='';S.secrets.page=1;filterSecrets();});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CODE SCANNING
+// ══════════════════════════════════════════════════════════════════════════════
+function loadCode(rows){
+  S.code.rows=rows;
+  document.getElementById('sp-code').style.display='none';
+  document.getElementById('mn-code').style.display='block';
+  setBadge('code',rows.length);
+  fillSel('cf-sev',uniq(rows,'severity')); fillSel('cf-state',uniq(rows,'state'));
+  fillSel('cf-tool',uniq(rows,'tool_name')); fillSel('cf-repo',uniq(rows,'repo_name'));
+  filterCode(); renderCodeCharts(rows);
+}
+
+function filterCode(){
+  const [sv,st,tl,rp,sq]=['cf-sev','cf-state','cf-tool','cf-repo','cf-q'].map(gv);
+  const s=sq.toLowerCase();
+  S.code.filtered=S.code.rows.filter(r=>
+    (!sv||r.severity===sv)&&(!st||r.state===st)&&(!tl||r.tool_name===tl)&&(!rp||r.repo_name===rp)&&
+    (!s||JSON.stringify(r).toLowerCase().includes(s)));
+  S.code.page=1; renderCode();
+  const src=S.code.filtered; const n=src.length||1;
+  mkStats('st-code',[
+    {label:'Total Alerts',value:src.length.toLocaleString(),sub:'all alerts',color:'#6366f1'},
+    {label:'Open',value:src.filter(r=>r.state==='open').length.toLocaleString(),sub:`${pct(src.filter(r=>r.state==='open').length,n)}% of total`,color:'#ef4444'},
+    {label:'Critical',value:src.filter(r=>r.severity==='critical').length.toLocaleString(),sub:'highest priority',color:'#ef4444'},
+    {label:'High',value:src.filter(r=>r.severity==='high').length.toLocaleString(),sub:'high priority',color:'#f97316'},
+    {label:'Repos Affected',value:new Set(src.map(r=>r.repo_name)).size.toLocaleString(),sub:'unique repos',color:'#3b82f6'},
+    {label:'Unique Rules',value:new Set(src.map(r=>r.rule_id)).size.toLocaleString(),sub:'distinct patterns',color:'#8b5cf6'},
+  ]);
+}
+
+function renderCode(){
+  doSort('code');
+  const rows=S.code.filtered, n=rows.length;
+  document.getElementById('cc-cnt').textContent=`${n.toLocaleString()} results`;
+  document.getElementById('tb-code').innerHTML=rows.slice((S.code.page-1)*PS,S.code.page*PS).map(r=>`
+    <tr>
+      <td>${esc(r.alert_id||'—')}</td>
+      <td>${sevBdg(r.severity)}</td>
+      <td class="ct" title="${esc(r.title)}">${esc(r.title)||'—'}</td>
+      <td>${stateBdg(r.state)}</td>
+      <td class="cr" title="${esc(r.repo_name)}">${esc(short(r.repo_name))}</td>
+      <td class="cm" title="${esc(r.vulnerable_file_path)}">${esc(r.vulnerable_file_path)||'—'}${r.start_line?`<span style="color:var(--muted);font-size:.68rem"> :${r.start_line}</span>`:''}</td>
+      <td style="font-size:.76rem">${esc(r.tool_name||'—')}</td>
+      <td style="white-space:nowrap;color:var(--muted)">${fmtD(r.created_at)}</td>
+      <td>${r.code_scan_url?`<a class="al" href="${esc(r.code_scan_url)}" target="_blank">View →</a>`:'—'}</td>
+    </tr>`).join('');
+  mkPg('code',n,'pi-code','pb-code');
+}
+
+function renderCodeCharts(rows){
+  const sm=countBy(rows,'severity');
+  mkDonut('code','cc-sev',sm,Object.keys(sm).map(k=>SEV_C[k]||pc(0)));
+  const stm=countBy(rows,'state');
+  mkDonut('code','cc-state',stm,Object.keys(stm).map(k=>STATE_C[k]||pc(0)));
+  mkDonut('code','cc-tool',countBy(rows,'tool_name'));
+  const rm=countBy(rows,'repo_name'),tr=Object.entries(rm).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  mkHBar('code','cc-repos',tr.map(([k])=>short(k)),tr.map(([,v])=>v),tr.map((_,i)=>pc(i)));
+  const rl=countBy(rows,'title'),trl=Object.entries(rl).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  mkHBar('code','cc-rules',trl.map(([k])=>k),trl.map(([,v])=>v),trl.map((_,i)=>pc(i)));
+}
+
+['cf-sev','cf-state','cf-tool','cf-repo'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{S.code.page=1;filterCode();}));
+document.getElementById('cf-q').addEventListener('input',()=>{S.code.page=1;filterCode();});
+document.getElementById('cr-rst').addEventListener('click',()=>{['cf-sev','cf-state','cf-tool','cf-repo'].forEach(id=>document.getElementById(id).value='');document.getElementById('cf-q').value='';S.code.page=1;filterCode();});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// OWNER MAPPING
+// ══════════════════════════════════════════════════════════════════════════════
+function loadOwners(rows){
+  S.owners.rows=rows;
+  document.getElementById('sp-owners').style.display='none';
+  document.getElementById('mn-owners').style.display='block';
+  setBadge('owners',rows.length);
+  fillSel('of-sev',uniq(rows,'severity')); fillSel('of-state',uniq(rows,'state'));
+  fillSel('of-match',uniq(rows,'match_status')); fillSel('of-owner',uniq(rows,'codeowner'));
+  fillSel('of-repo',uniq(rows,'repo_name'));
+  filterOwners(); renderOwnersCharts(rows);
+}
+
+function filterOwners(){
+  const [sv,st,mt,ow,rp,sq]=['of-sev','of-state','of-match','of-owner','of-repo','of-q'].map(gv);
+  const s=sq.toLowerCase();
+  S.owners.filtered=S.owners.rows.filter(r=>
+    (!sv||r.severity===sv)&&(!st||r.state===st)&&(!mt||r.match_status===mt)&&
+    (!ow||r.codeowner===ow)&&(!rp||r.repo_name===rp)&&
+    (!s||JSON.stringify(r).toLowerCase().includes(s)));
+  S.owners.page=1; renderOwners();
+  const src=S.owners.filtered; const n=src.length||1;
+  const matched=src.filter(r=>r.match_status==='matched').length;
+  mkStats('st-owners',[
+    {label:'Total Alerts',value:src.length.toLocaleString(),sub:'all alerts',color:'#6366f1'},
+    {label:'Owner Matched',value:matched.toLocaleString(),sub:`${pct(matched,n)}% coverage`,color:'#22c55e'},
+    {label:'No Match',value:src.filter(r=>r.match_status==='no_match').length.toLocaleString(),sub:'no rule matched',color:'#f59e0b'},
+    {label:'No CODEOWNERS',value:src.filter(r=>r.match_status==='repo_not_in_codeowners').length.toLocaleString(),sub:'repo not tracked',color:'#94a3b8'},
+    {label:'Unique Owners',value:new Set(src.filter(r=>r.codeowner).map(r=>r.codeowner)).size.toLocaleString(),sub:'teams & users',color:'#8b5cf6'},
+    {label:'Critical + High',value:src.filter(r=>['critical','high'].includes(r.severity)).length.toLocaleString(),sub:'high priority',color:'#ef4444'},
+  ]);
+}
+
+function renderOwners(){
+  doSort('owners');
+  const rows=S.owners.filtered, n=rows.length;
+  document.getElementById('oc-cnt').textContent=`${n.toLocaleString()} results`;
+  document.getElementById('tb-owners').innerHTML=rows.slice((S.owners.page-1)*PS,S.owners.page*PS).map(r=>`
+    <tr>
+      <td>${esc(r.alert_id||'—')}</td>
+      <td>${sevBdg(r.severity)}</td>
+      <td>${stateBdg(r.state)}</td>
+      <td class="cr" title="${esc(r.repo_name)}">${esc(short(r.repo_name))}</td>
+      <td class="cm" title="${esc(r.vulnerable_file_path)}">${esc(r.vulnerable_file_path)||'—'}</td>
+      <td class="ct" title="${esc(r.title)}">${esc(r.title)||'—'}</td>
+      <td style="font-size:.74rem;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.codeowner)}">${esc(r.codeowner)||'<span style="color:var(--muted)">—</span>'}</td>
+      <td class="cm" title="${esc(r.matched_pattern)}">${esc(r.matched_pattern)||'—'}</td>
+      <td>${matchBdg(r.match_status)}</td>
+      <td>${r.code_scan_url?`<a class="al" href="${esc(r.code_scan_url)}" target="_blank">View →</a>`:'—'}</td>
+    </tr>`).join('');
+  mkPg('owners',n,'pi-owners','pb-owners');
+}
+
+function renderOwnersCharts(rows){
+  const mm=countBy(rows,'match_status');
+  mkDonut('owners','oc-match',mm,Object.keys(mm).map(k=>MATCH_C[k]||pc(0)));
+  const sm=countBy(rows,'severity');
+  mkDonut('owners','oc-sev',sm,Object.keys(sm).map(k=>SEV_C[k]||pc(0)));
+  const stm=countBy(rows,'state');
+  mkDonut('owners','oc-state',stm,Object.keys(stm).map(k=>STATE_C[k]||pc(0)));
+  const om={};
+  rows.filter(r=>r.codeowner).forEach(r=>{om[r.codeowner]=(om[r.codeowner]||0)+1;});
+  const top=Object.entries(om).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  const shortOwner=n=>n.replace(/@[Kk]eep[Tt]ruckin\//,'');
+  mkHBar('owners','oc-owners',top.map(([k])=>shortOwner(k)),top.map(([,v])=>v),top.map((_,i)=>pc(i)));
+}
+
+['of-sev','of-state','of-match','of-owner','of-repo'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{S.owners.page=1;filterOwners();}));
+document.getElementById('of-q').addEventListener('input',()=>{S.owners.page=1;filterOwners();});
+document.getElementById('or-rst').addEventListener('click',()=>{['of-sev','of-state','of-match','of-owner','of-repo'].forEach(id=>document.getElementById(id).value='');document.getElementById('of-q').value='';S.owners.page=1;filterOwners();});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SECURITY AUDIT
+// ══════════════════════════════════════════════════════════════════════════════
+const FEATS=[
+  {k:'advanced_security_enabled',      label:'GitHub Advanced Security', color:'#6366f1'},
+  {k:'secret_scanning_enabled',        label:'Secret Scanning',          color:'#8b5cf6'},
+  {k:'secret_scanning_push_protection_enabled',label:'Push Protection',  color:'#06b6d4'},
+  {k:'dependabot_alerts_enabled',      label:'Dependabot Alerts',        color:'#22c55e'},
+  {k:'codeql_enabled',                 label:'CodeQL / Code Scanning',   color:'#f59e0b'},
+];
+
+function loadAudit(rows){
+  S.audit.rows=rows;
+  document.getElementById('sp-audit').style.display='none';
+  document.getElementById('mn-audit').style.display='block';
+  setBadge('audit',rows.length);
+  fillSel('af-vis',uniq(rows,'visibility'));
+  filterAudit(); renderAuditCharts(rows);
+}
+
+function filterAudit(){
+  const [vs,ar,gh,ss,dp,cq,sq]=['af-vis','af-arch','af-ghas','af-ss','af-dep','af-cql','af-q'].map(gv);
+  const s=sq.toLowerCase();
+  S.audit.filtered=S.audit.rows.filter(r=>
+    (!vs||r.visibility===vs)&&
+    (!ar||(r.archived||'').toLowerCase()===ar.toLowerCase())&&
+    (!gh||(r.advanced_security_enabled||'').toLowerCase()===gh.toLowerCase())&&
+    (!ss||(r.secret_scanning_enabled||'').toLowerCase()===ss.toLowerCase())&&
+    (!dp||(r.dependabot_alerts_enabled||'').toLowerCase()===dp.toLowerCase())&&
+    (!cq||(r.codeql_enabled||'').toLowerCase()===cq.toLowerCase())&&
+    (!s||r.repo_name.toLowerCase().includes(s)));
+  S.audit.page=1; renderAudit();
+  const src=S.audit.filtered; const n=src.length||1;
+  mkStats('st-audit',[
+    {label:'Total Repos',value:src.length.toLocaleString(),sub:'in audit',color:'#6366f1'},
+    {label:'GHAS Enabled',value:src.filter(r=>asBool(r.advanced_security_enabled)).length,sub:`${pct(src.filter(r=>asBool(r.advanced_security_enabled)).length,n)}% of repos`,color:'#8b5cf6'},
+    {label:'Secret Scanning',value:src.filter(r=>asBool(r.secret_scanning_enabled)).length,sub:`${pct(src.filter(r=>asBool(r.secret_scanning_enabled)).length,n)}% of repos`,color:'#06b6d4'},
+    {label:'Dependabot',value:src.filter(r=>asBool(r.dependabot_alerts_enabled)).length,sub:`${pct(src.filter(r=>asBool(r.dependabot_alerts_enabled)).length,n)}% of repos`,color:'#22c55e'},
+    {label:'CodeQL',value:src.filter(r=>asBool(r.codeql_enabled)).length,sub:`${pct(src.filter(r=>asBool(r.codeql_enabled)).length,n)}% of repos`,color:'#f59e0b'},
+    {label:'Archived',value:src.filter(r=>asBool(r.archived)).length,sub:`${pct(src.filter(r=>asBool(r.archived)).length,n)}% of repos`,color:'#94a3b8'},
+  ]);
+  document.getElementById('feat-bars').innerHTML=`<div class="feat-list">${FEATS.map(f=>{
+    const cnt=src.filter(r=>asBool(r[f.k])).length, p=pct(cnt,n);
+    return `<div class="feat-row"><div class="feat-lbl"><span>${f.label}</span><span>${cnt.toLocaleString()} / ${src.length.toLocaleString()} (${p}%)</span></div><div class="feat-bar"><div class="feat-fill" style="width:${p}%;background:${f.color}"></div></div></div>`;
+  }).join('')}</div>`;
+}
+
+function renderAudit(){
+  doSort('audit');
+  const rows=S.audit.filtered, n=rows.length;
+  document.getElementById('ac-cnt').textContent=`${n.toLocaleString()} results`;
+  document.getElementById('tb-audit').innerHTML=rows.slice((S.audit.page-1)*PS,S.audit.page*PS).map(r=>`
+    <tr>
+      <td style="font-weight:500;font-size:.8rem">${esc(r.repo_name)}</td>
+      <td>${bdg(r.visibility||'—',(r.visibility||'').toLowerCase())}</td>
+      <td>${bdg(r.archived||'—',(r.archived||'').toLowerCase())}</td>
+      <td>${boolBdg(r.advanced_security_enabled)}</td>
+      <td>${boolBdg(r.secret_scanning_enabled)}</td>
+      <td>${boolBdg(r.secret_scanning_push_protection_enabled)}</td>
+      <td>${boolBdg(r.dependabot_alerts_enabled)}</td>
+      <td>${boolBdg(r.codeql_enabled)}</td>
+    </tr>`).join('');
+  mkPg('audit',n,'pi-audit','pb-audit');
+}
+
+function renderAuditCharts(rows){
+  mkDonut('audit','ac-vis',countBy(rows,'visibility'),['#3b82f6','#8b5cf6','#06b6d4']);
+  mkDonut('audit','ac-arch',{Active:rows.filter(r=>!asBool(r.archived)).length,Archived:rows.filter(r=>asBool(r.archived)).length},['#22c55e','#94a3b8']);
+  const all=rows.filter(r=>FEATS.every(f=>asBool(r[f.k]))).length;
+  mkDonut('audit','ac-full',{'All Features':all,'Partial / None':rows.length-all},['#22c55e','#ef4444']);
+}
+
+['af-vis','af-arch','af-ghas','af-ss','af-dep','af-cql'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{S.audit.page=1;filterAudit();}));
+document.getElementById('af-q').addEventListener('input',()=>{S.audit.page=1;filterAudit();});
+document.getElementById('ar-rst').addEventListener('click',()=>{['af-vis','af-arch','af-ghas','af-ss','af-dep','af-cql'].forEach(id=>document.getElementById(id).value='');document.getElementById('af-q').value='';S.audit.page=1;filterAudit();});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CODEOWNERS
+// ══════════════════════════════════════════════════════════════════════════════
+function loadCodeowners(rows){
+  S.codeowners.rows=rows;
+  document.getElementById('sp-codeowners').style.display='none';
+  document.getElementById('mn-codeowners').style.display='block';
+  setBadge('codeowners',rows.length);
+  fillSel('cof-owner',uniq(rows,'owner')); fillSel('cof-status',uniq(rows,'status'));
+  filterCodeowners(); renderCodeownersCharts(rows);
+}
+
+function filterCodeowners(){
+  const [ow,st,sq]=['cof-owner','cof-status','cof-q'].map(gv); const s=sq.toLowerCase();
+  S.codeowners.filtered=S.codeowners.rows.filter(r=>
+    (!ow||r.owner===ow)&&(!st||r.status===st)&&
+    (!s||JSON.stringify(r).toLowerCase().includes(s)));
+  S.codeowners.page=1; renderCodeowners();
+  const src=S.codeowners.filtered;
+  mkStats('st-codeowners',[
+    {label:'Total Entries',value:src.length.toLocaleString(),sub:'CODEOWNERS patterns',color:'#6366f1'},
+    {label:'Repos',value:new Set(src.map(r=>r.repo_name)).size.toLocaleString(),sub:'unique repositories',color:'#3b82f6'},
+    {label:'Unique Owners',value:new Set(src.map(r=>r.owner).filter(Boolean)).size.toLocaleString(),sub:'teams & users',color:'#8b5cf6'},
+    {label:'Found',value:src.filter(r=>r.status==='found').length.toLocaleString(),sub:`${pct(src.filter(r=>r.status==='found').length,src.length||1)}% of entries`,color:'#22c55e'},
+  ]);
+}
+
+function renderCodeowners(){
+  doSort('codeowners');
+  const rows=S.codeowners.filtered, n=rows.length;
+  document.getElementById('co-cnt').textContent=`${n.toLocaleString()} results`;
+  document.getElementById('tb-codeowners').innerHTML=rows.slice((S.codeowners.page-1)*PS,S.codeowners.page*PS).map(r=>`
+    <tr>
+      <td style="font-weight:500">${r.repo_url?`<a class="al" href="${esc(r.repo_url)}" target="_blank">${esc(r.repo_name)}</a>`:esc(r.repo_name)}</td>
+      <td class="cm">${esc(r.codeowners_path||'—')}</td>
+      <td class="cm" title="${esc(r.folder)}">${esc(r.folder)||'—'}</td>
+      <td style="font-size:.76rem;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.owner)}">${esc(r.owner)||'—'}</td>
+      <td>${bdg(r.status||'—',(r.status||'').toLowerCase())}</td>
+    </tr>`).join('');
+  mkPg('codeowners',n,'pi-codeowners','pb-codeowners');
+}
+
+function renderCodeownersCharts(rows){
+  mkDonut('codeowners','co-status',countBy(rows,'status'),['#22c55e','#ef4444','#f59e0b','#94a3b8']);
+  mkDonut('codeowners','co-path',countBy(rows,'codeowners_path'));
+  const owRepos={};
+  rows.filter(r=>r.owner).forEach(r=>{owRepos[r.owner]=owRepos[r.owner]||new Set();owRepos[r.owner].add(r.repo_name);});
+  const top=Object.entries(owRepos).map(([k,v])=>[k,v.size]).sort((a,b)=>b[1]-a[1]).slice(0,15);
+  const shortOwner=n=>n.replace(/@[Kk]eep[Tt]ruckin\//,'');
+  mkHBar('codeowners','co-owners',top.map(([k])=>shortOwner(k)),top.map(([,v])=>v),top.map((_,i)=>pc(i)));
+}
+
+['cof-owner','cof-status'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{S.codeowners.page=1;filterCodeowners();}));
+document.getElementById('cof-q').addEventListener('input',()=>{S.codeowners.page=1;filterCodeowners();});
+document.getElementById('cor-rst').addEventListener('click',()=>{['cof-owner','cof-status'].forEach(id=>document.getElementById(id).value='');document.getElementById('cof-q').value='';S.codeowners.page=1;filterCodeowners();});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SHARED: load / upload / auto-fetch / tab switch
+// ══════════════════════════════════════════════════════════════════════════════
+const LOADERS={secrets:loadSecrets,code:loadCode,owners:loadOwners,audit:loadAudit,codeowners:loadCodeowners};
+const REND={secrets:renderSecrets,code:renderCode,owners:renderOwners,audit:renderAudit,codeowners:renderCodeowners};
+
+function parseCSV(txt){ return Papa.parse(txt.trim(),{header:true,skipEmptyLines:true}).data; }
+function handleFile(t,file){ const r=new FileReader(); r.onload=e=>LOADERS[t](parseCSV(e.target.result)); r.readAsText(file); }
+function setBadge(t,n){ const el=document.getElementById(`b-${t}`); el.textContent=n>=1000?(n/1000).toFixed(1)+'k':n; el.classList.add('on'); }
+
+// Wire file inputs + drop zones
+[['secrets','github_secrets.csv'],['code','kt_alerts.csv'],['owners','mapped_alerts.csv'],['audit','security_audit.csv'],['codeowners','codeowners_report.csv']]
+.forEach(([t,fname])=>{
+  const inp=document.getElementById(`fi-${t}`), dz=document.getElementById(`dz-${t}`);
+  dz.addEventListener('click',()=>inp.click());
+  inp.addEventListener('change',e=>{ if(e.target.files[0]) handleFile(t,e.target.files[0]); });
+  dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');});
+  dz.addEventListener('dragleave',()=>dz.classList.remove('over'));
+  dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('over');if(e.dataTransfer.files[0])handleFile(t,e.dataTransfer.files[0]);});
+  // Auto-load: try local then parent directory
+  const paths = t==='secrets' ? [fname,`../${fname}`] : [`../${fname}`];
+  (async()=>{ for(const p of paths){ try{ const r=await fetch(p); if(!r.ok)continue; LOADERS[t](parseCSV(await r.text())); break; }catch{} } })();
+});
+
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const t=btn.dataset.tab;
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(`panel-${t}`).classList.add('active');
+  });
+});
+</script>
+</body>
+</html>
